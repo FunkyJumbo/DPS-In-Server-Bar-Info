@@ -6,7 +6,7 @@
     "Description": "Displays your real-time encounter DPS directly in the FFXIV server info bar. Connects to ACT via OverlayPlugin for accurate DPS tracking. Shows job name and final encounter DPS with a clear indicator when combat ends.",
     "RepoUrl": "https://github.com/FunkyJumbo/DPS-In-Server-Bar-Info",
     "InternalName": "DpsInServerBar",
-    "AssemblyVersion": "0.0.0.3",
+    "AssemblyVersion": "0.0.0.4",
     "DalamudApiLevel": 14,
     "ApplicableVersion": "any",
     "Tags": ["dps", "combat", "overlay", "act"],
@@ -17,8 +17,8 @@
     "IconUrl": "https://raw.githubusercontent.com/FunkyJumbo/DPS-In-Server-Bar-Info/master/DpsInServerBar/icon.png",
     "ImageUrls": [],
     "Changelog": "See GitHub releases for details.",
-    "DownloadLinkInstall": "https://github.com/FunkyJumbo/DPS-In-Server-Bar-Info/releases/download/0.0.0.3/DpsInServerBar-v0.0.0.3.zip",
-    "DownloadLinkUpdate": "https://github.com/FunkyJumbo/DPS-In-Server-Bar-Info/releases/download/0.0.0.3/DpsInServerBar-v0.0.0.3.zip",
+    "DownloadLinkInstall": "https://github.com/FunkyJumbo/DPS-In-Server-Bar-Info/releases/download/0.0.0.4/DpsInServerBar-v0.0.0.4.zip",
+    "DownloadLinkUpdate": "https://github.com/FunkyJumbo/DPS-In-Server-Bar-Info/releases/download/0.0.0.4/DpsInServerBar-v0.0.0.4.zip",
     "DownloadLinkTesting": ""
   }
 ]

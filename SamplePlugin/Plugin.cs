@@ -1,10 +1,13 @@
 ﻿using Dalamud.Game.Command;
 using Dalamud.IoC;
 using Dalamud.Plugin;
+using System;
 using System.IO;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
+using Dalamud.Game.Gui.Dtr;
 using SamplePlugin.Windows;
+using SamplePlugin.Services;
 
 namespace SamplePlugin;
 
@@ -17,8 +20,11 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPlayerState PlayerState { get; private set; } = null!;
     [PluginService] internal static IDataManager DataManager { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
+    [PluginService] internal static IDtrBar DtrBar { get; private set; } = null!;
 
     private const string CommandName = "/pmycommand";
+    private IDtrBarEntry? dpsEntry;
+    private ActService? actService;
 
     public Configuration Configuration { get; init; }
 
@@ -58,6 +64,41 @@ public sealed class Plugin : IDalamudPlugin
         // Use /xllog to open the log window in-game
         // Example Output: 00:57:54.959 | INF | [SamplePlugin] ===A cool log message from Sample Plugin===
         Log.Information($"===A cool log message from {PluginInterface.Manifest.Name}===");
+
+        // Initialize DTR bar entry for DPS display
+        InitializeDtrBar();
+
+        // Initialize ACT service
+        actService = new ActService(Log);
+        actService.OnDpsDataReceived += OnActDpsReceived;
+        actService.Connect();
+    }
+
+    private void OnActDpsReceived(object? sender, DpsDataEventArgs e)
+    {
+        if (dpsEntry != null)
+        {
+            var dpsValue = (int)Math.Round(e.PersonalDps);
+            dpsEntry.Text = $"{dpsValue} DPS";
+        }
+    }
+
+    private void InitializeDtrBar()
+    {
+        try
+        {
+            dpsEntry = DtrBar.Get("DPS");
+            dpsEntry.Text = "- DPS";
+            dpsEntry.Shown = true;
+            Log.Information("DTR bar entry initialized successfully");
+        }
+        catch (Exception ex)
+        {
+            dpsEntry = DtrBar.Get("DPS");
+            dpsEntry.Text = "X DPS";
+            dpsEntry.Shown = true;
+            Log.Error(ex, "Failed to initialize DTR bar entry");
+        }
     }
 
     public void Dispose()
@@ -73,6 +114,12 @@ public sealed class Plugin : IDalamudPlugin
         MainWindow.Dispose();
 
         CommandManager.RemoveHandler(CommandName);
+
+        // Clean up DTR bar entry
+        dpsEntry?.Remove();
+
+        // Clean up ACT service
+        actService?.Dispose();
     }
 
     private void OnCommand(string command, string args)

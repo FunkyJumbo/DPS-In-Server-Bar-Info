@@ -198,7 +198,22 @@ public class ActService : IDisposable
                 lastJobId = jobString;
                 log.Information($"[ActService] Job data: {jobString}");
                 
-                OnDpsDataReceived?.Invoke(this, new DpsDataEventArgs { PersonalDps = dps, JobId = jobString });
+                // Extract rDPS (raid DPS contribution) if available
+                var rdpsString = playerData["rDPS"]?.ToString() ??
+                                 playerData["RDPS"]?.ToString() ??
+                                 playerData["encRDPS"]?.ToString() ??
+                                 playerData["ENCRDPS"]?.ToString();
+
+                double rdpsValue = 0;
+                if (!string.IsNullOrEmpty(rdpsString) && double.TryParse(rdpsString, out var parsedRdps))
+                {
+                    if (!double.IsInfinity(parsedRdps) && !double.IsNaN(parsedRdps))
+                    {
+                        rdpsValue = parsedRdps;
+                    }
+                }
+
+                OnDpsDataReceived?.Invoke(this, new DpsDataEventArgs { PersonalDps = dps, RaidDps = rdpsValue, JobId = jobString });
             }
             else
             {
@@ -234,5 +249,6 @@ public class ActService : IDisposable
 public class DpsDataEventArgs : EventArgs
 {
     public double PersonalDps { get; set; }
+    public double RaidDps { get; set; }
     public string? JobId { get; set; }
 }

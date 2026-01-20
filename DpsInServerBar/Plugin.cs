@@ -8,6 +8,7 @@ using Dalamud.Plugin.Services;
 using Dalamud.Game.Gui.Dtr;
 using DpsInServerBar.Windows;
 using DpsInServerBar.Services;
+using System.Reflection;
 
 namespace DpsInServerBar;
 
@@ -31,7 +32,9 @@ public sealed class Plugin : IDalamudPlugin
     private DateTime? combatEndTime = null;
     private bool showFinalIndicator = false;
     private double lastDpsValue = 0;
+    private double lastRaidDpsValue = 0;
     private string? lastJobName = null;
+    private bool showRaidDps = false;
 
     public Configuration Configuration { get; init; }
 
@@ -112,11 +115,7 @@ public sealed class Plugin : IDalamudPlugin
                 showFinalIndicator = true;
                 
                 // Update display with final indicator
-                if (dpsEntry != null && lastDpsValue > 0)
-                {
-                    var indicator = showFinalIndicator ? "● " : "";
-                    dpsEntry.Text = $"{indicator}{lastJobName} {(int)Math.Round(lastDpsValue)} DPS";
-                }
+                UpdateDisplay();
                 
                 actService?.Dispose();
                 actService = new ActService(Log);
@@ -131,15 +130,14 @@ public sealed class Plugin : IDalamudPlugin
     {
         if (dpsEntry != null)
         {
-            var dpsValue = (int)Math.Round(e.PersonalDps);
             var jobName = e.JobId?.ToUpper() ?? "???";
-            
+
             // Store last values for final indicator update
             lastDpsValue = e.PersonalDps;
+            lastRaidDpsValue = e.RaidDps;
             lastJobName = jobName;
-            
-            var indicator = showFinalIndicator ? "● " : "";
-            dpsEntry.Text = $"{indicator}{jobName} {dpsValue} DPS";
+
+            UpdateDisplay();
         }
     }
 
@@ -149,6 +147,8 @@ public sealed class Plugin : IDalamudPlugin
         {
             dpsEntry = DtrBar.Get("DPS");
             dpsEntry.Text = "- DPS";
+            dpsEntry.Tooltip = "Click to toggle DPS / rDPS";
+            RegisterDtrClickToggle();
             dpsEntry.Shown = true;
             Log.Information("DTR bar entry initialized successfully");
         }
@@ -156,9 +156,95 @@ public sealed class Plugin : IDalamudPlugin
         {
             dpsEntry = DtrBar.Get("DPS");
             dpsEntry.Text = "X DPS";
+            dpsEntry.Tooltip = "Click to toggle DPS / rDPS";
+            RegisterDtrClickToggle();
             dpsEntry.Shown = true;
             Log.Error(ex, "Failed to initialize DTR bar entry");
         }
+    }
+
+    private void RegisterDtrClickToggle()
+    {
+        if (dpsEntry == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var entryType = dpsEntry.GetType();
+            var clickProp = entryType.GetProperty("OnClick") ?? entryType.GetProperty("Click");
+            if (clickProp == null || !clickProp.CanWrite)
+            {
+                Log.Warning("[Plugin] DTR entry does not expose a writable click handler");
+                return;
+            }
+
+            var invoke = clickProp.PropertyType.GetMethod("Invoke");
+            var parameters = invoke?.GetParameters();
+
+            Delegate? handler = null;
+
+            if (parameters is { Length: 0 })
+            {
+                handler = Delegate.CreateDelegate(clickProp.PropertyType, this, GetType().GetMethod(nameof(OnDtrClickNoArgs), BindingFlags.Instance | BindingFlags.NonPublic)!);
+            }
+            else if (parameters is { Length: 1 })
+            {
+                handler = Delegate.CreateDelegate(clickProp.PropertyType, this, GetType().GetMethod(nameof(OnDtrClickOneArg), BindingFlags.Instance | BindingFlags.NonPublic)!);
+            }
+
+            if (handler != null)
+            {
+                clickProp.SetValue(dpsEntry, handler);
+            }
+            else
+            {
+                Log.Warning("[Plugin] Could not attach click handler (unsupported signature)");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "[Plugin] Failed to register DTR click toggle");
+        }
+    }
+
+    private void OnDtrClickNoArgs()
+    {
+        ToggleMetric();
+    }
+
+    private void OnDtrClickOneArg(object? _)
+    {
+        ToggleMetric();
+    }
+
+    private void ToggleMetric()
+    {
+        showRaidDps = !showRaidDps;
+        showFinalIndicator = false; // reset indicator when toggling mid-combat
+        UpdateDisplay();
+    }
+
+    private void UpdateDisplay()
+    {
+        if (dpsEntry == null)
+        {
+            return;
+        }
+
+        var label = showRaidDps ? "rDPS" : "DPS";
+        var value = showRaidDps ? lastRaidDpsValue : lastDpsValue;
+        var job = lastJobName ?? "---";
+        var indicator = showFinalIndicator ? "● " : string.Empty;
+
+        if (value <= 0)
+        {
+            dpsEntry.Text = $"- {label}";
+            return;
+        }
+
+        dpsEntry.Text = $"{indicator}{job} {(int)Math.Round(value)} {label}";
     }
 
     public void Dispose()

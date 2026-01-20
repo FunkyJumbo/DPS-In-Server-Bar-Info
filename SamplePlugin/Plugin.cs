@@ -79,7 +79,8 @@ public sealed class Plugin : IDalamudPlugin
         if (dpsEntry != null)
         {
             var dpsValue = (int)Math.Round(e.PersonalDps);
-            dpsEntry.Text = $"{dpsValue} DPS";
+            var jobName = e.JobId?.ToUpper() ?? "???";
+            dpsEntry.Text = $"{jobName} {dpsValue} DPS";
         }
     }
 

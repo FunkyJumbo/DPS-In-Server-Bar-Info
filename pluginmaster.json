@@ -17,8 +17,8 @@
     "IconUrl": "",
     "ImageUrls": [],
     "Changelog": "See GitHub releases for details.",
-    "DownloadLinkInstall": "https://github.com/FunkyJumbo/DPS-In-Server-Bar-Info/releases/download/v0.0.0.3/DpsInServerBar-v0.0.0.3.zip",
-    "DownloadLinkUpdate": "https://github.com/FunkyJumbo/DPS-In-Server-Bar-Info/releases/download/v0.0.0.3/DpsInServerBar-v0.0.0.3.zip",
+    "DownloadLinkInstall": "https://github.com/FunkyJumbo/DPS-In-Server-Bar-Info/releases/download/0.0.0.3/DpsInServerBar-v0.0.0.3.zip",
+    "DownloadLinkUpdate": "https://github.com/FunkyJumbo/DPS-In-Server-Bar-Info/releases/download/0.0.0.3/DpsInServerBar-v0.0.0.3.zip",
     "DownloadLinkTesting": ""
   }
 ]

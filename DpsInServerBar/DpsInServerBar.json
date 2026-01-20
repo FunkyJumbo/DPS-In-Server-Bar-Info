@@ -1,0 +1,13 @@
+{
+  "Author": "FunkyJumbo",
+  "Name": "DPS In Server Bar",
+  "Punchline": "Clean DPS display integrated in your server info bar",
+  "Description": "Displays your real-time encounter DPS directly in the FFXIV server info bar. Connects to ACT via OverlayPlugin for accurate DPS tracking. Shows job name and final encounter DPS with a clear indicator when combat ends.",
+  "ApplicableVersion": "any",
+  "Tags": [
+    "dps",
+    "combat",
+    "overlay",
+    "act"
+  ]
+}

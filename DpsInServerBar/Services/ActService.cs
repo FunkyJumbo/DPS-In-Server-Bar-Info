@@ -143,7 +143,30 @@ public class ActService : IDisposable
                 return;
             }
 
-            log.Information($"[ActService] Combatant keys: {string.Join(", ", ((JObject)combatant).Properties().Select(p => p.Name))}");
+                log.Information($"[ActService] Combatant keys: {string.Join(", ", ((JObject)combatant).Properties().Select(p => p.Name))}");
+
+                // Compute party DPS sum (EncDPS/encdps/DPS) excluding companions like Chocobo
+                double partyDps = 0;
+                foreach (var prop in ((JObject)combatant).Properties())
+                {
+                    if (prop.Name.Contains("Chocobo", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var entry = prop.Value;
+                    var pdpsString = entry["EncDPS"]?.ToString() ??
+                                     entry["encdps"]?.ToString() ??
+                                     entry["DPS"]?.ToString();
+
+                    if (!string.IsNullOrEmpty(pdpsString) && double.TryParse(pdpsString, out var pdpsValue))
+                    {
+                        if (!double.IsInfinity(pdpsValue) && !double.IsNaN(pdpsValue))
+                        {
+                            partyDps += pdpsValue;
+                        }
+                    }
+                }
 
             // Find player data - look for "YOU" first, or any key containing "(YOU)" but not "Chocobo"
             JToken? playerData = combatant["YOU"];
@@ -198,22 +221,7 @@ public class ActService : IDisposable
                 lastJobId = jobString;
                 log.Information($"[ActService] Job data: {jobString}");
                 
-                // Extract rDPS (raid DPS contribution) if available
-                var rdpsString = playerData["rDPS"]?.ToString() ??
-                                 playerData["RDPS"]?.ToString() ??
-                                 playerData["encRDPS"]?.ToString() ??
-                                 playerData["ENCRDPS"]?.ToString();
-
-                double rdpsValue = 0;
-                if (!string.IsNullOrEmpty(rdpsString) && double.TryParse(rdpsString, out var parsedRdps))
-                {
-                    if (!double.IsInfinity(parsedRdps) && !double.IsNaN(parsedRdps))
-                    {
-                        rdpsValue = parsedRdps;
-                    }
-                }
-
-                OnDpsDataReceived?.Invoke(this, new DpsDataEventArgs { PersonalDps = dps, RaidDps = rdpsValue, JobId = jobString });
+                OnDpsDataReceived?.Invoke(this, new DpsDataEventArgs { PersonalDps = dps, PartyDps = partyDps, JobId = jobString });
             }
             else
             {
@@ -249,6 +257,6 @@ public class ActService : IDisposable
 public class DpsDataEventArgs : EventArgs
 {
     public double PersonalDps { get; set; }
-    public double RaidDps { get; set; }
+    public double PartyDps { get; set; }
     public string? JobId { get; set; }
 }

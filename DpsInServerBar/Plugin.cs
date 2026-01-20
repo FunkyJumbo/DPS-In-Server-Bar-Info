@@ -32,9 +32,9 @@ public sealed class Plugin : IDalamudPlugin
     private DateTime? combatEndTime = null;
     private bool showFinalIndicator = false;
     private double lastDpsValue = 0;
-    private double lastRaidDpsValue = 0;
+    private double lastPartyDpsValue = 0;
     private string? lastJobName = null;
-    private bool showRaidDps = false;
+    private bool showPartyDps = false;
 
     public Configuration Configuration { get; init; }
 
@@ -134,7 +134,7 @@ public sealed class Plugin : IDalamudPlugin
 
             // Store last values for final indicator update
             lastDpsValue = e.PersonalDps;
-            lastRaidDpsValue = e.RaidDps;
+            lastPartyDpsValue = e.PartyDps;
             lastJobName = jobName;
 
             UpdateDisplay();
@@ -147,7 +147,7 @@ public sealed class Plugin : IDalamudPlugin
         {
             dpsEntry = DtrBar.Get("DPS");
             dpsEntry.Text = "- DPS";
-            dpsEntry.Tooltip = "Click to toggle DPS / rDPS";
+            dpsEntry.Tooltip = "Click to toggle DPS / pDPS";
             RegisterDtrClickToggle();
             dpsEntry.Shown = true;
             Log.Information("DTR bar entry initialized successfully");
@@ -156,7 +156,7 @@ public sealed class Plugin : IDalamudPlugin
         {
             dpsEntry = DtrBar.Get("DPS");
             dpsEntry.Text = "X DPS";
-            dpsEntry.Tooltip = "Click to toggle DPS / rDPS";
+            dpsEntry.Tooltip = "Click to toggle DPS / pDPS";
             RegisterDtrClickToggle();
             dpsEntry.Shown = true;
             Log.Error(ex, "Failed to initialize DTR bar entry");
@@ -221,7 +221,7 @@ public sealed class Plugin : IDalamudPlugin
 
     private void ToggleMetric()
     {
-        showRaidDps = !showRaidDps;
+        showPartyDps = !showPartyDps;
         showFinalIndicator = false; // reset indicator when toggling mid-combat
         UpdateDisplay();
     }
@@ -233,14 +233,21 @@ public sealed class Plugin : IDalamudPlugin
             return;
         }
 
-        var label = showRaidDps ? "rDPS" : "DPS";
-        var value = showRaidDps ? lastRaidDpsValue : lastDpsValue;
+        var label = showPartyDps ? "pDPS" : "DPS";
+        var value = showPartyDps ? lastPartyDpsValue : lastDpsValue;
         var job = lastJobName ?? "---";
         var indicator = showFinalIndicator ? "● " : string.Empty;
 
         if (value <= 0)
         {
-            dpsEntry.Text = $"- {label}";
+            if (!string.IsNullOrEmpty(lastJobName))
+            {
+                dpsEntry.Text = $"{indicator}{job} 0 {label}";
+            }
+            else
+            {
+                dpsEntry.Text = $"- {label}";
+            }
             return;
         }
 

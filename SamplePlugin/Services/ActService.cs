@@ -15,6 +15,7 @@ public class ActService : IDisposable
     private ClientWebSocket? webSocket;
     private CancellationTokenSource? cancellationTokenSource;
     private Task? receiveTask;
+    private string? lastJobId;
 
     public event EventHandler<DpsDataEventArgs>? OnDpsDataReceived;
 
@@ -81,7 +82,8 @@ public class ActService : IDisposable
 
     private async Task ReceiveLoop(CancellationToken token)
     {
-        var buffer = new byte[4096];
+        var buffer = new byte[8192];
+        var messageBuilder = new StringBuilder();
 
         try
         {
@@ -92,9 +94,18 @@ public class ActService : IDisposable
 
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
-                    var json = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                    log.Information($"[ActService] Received message ({result.Count} bytes): {json.Substring(0, Math.Min(200, json.Length))}...");
-                    ParseAndUpdateDps(json);
+                    var fragment = Encoding.UTF8.GetString(buffer, 0, result.Count);
+                    messageBuilder.Append(fragment);
+
+                    // Only process when we have the complete message
+                    if (result.EndOfMessage)
+                    {
+                        var json = messageBuilder.ToString();
+                        messageBuilder.Clear();
+                        
+                        log.Debug($"[ActService] Received complete message ({json.Length} bytes)");
+                        ParseAndUpdateDps(json);
+                    }
                 }
             }
             log.Information($"[ActService] Receive loop ended. WebSocket state: {webSocket?.State}");
@@ -134,9 +145,22 @@ public class ActService : IDisposable
 
             log.Information($"[ActService] Combatant keys: {string.Join(", ", ((JObject)combatant).Properties().Select(p => p.Name))}");
 
-            // Get player character name from somewhere - for now we'll look for it
-            // Try to find "YOU" first, then try to find the player name
+            // Find player data - look for "YOU" first, or any key containing "(YOU)" but not "Chocobo"
             JToken? playerData = combatant["YOU"];
+            
+            if (playerData == null)
+            {
+                // When in a party/group, the key is like "PlayerName (YOU)"
+                // Ignore chocobo entries
+                var youKey = ((JObject)combatant).Properties()
+                    .FirstOrDefault(p => p.Name.Contains("(YOU)") && !p.Name.Contains("Chocobo", StringComparison.OrdinalIgnoreCase))?.Name;
+                
+                if (youKey != null)
+                {
+                    playerData = combatant[youKey];
+                    log.Information($"[ActService] Found player data under key: {youKey}");
+                }
+            }
             
             if (playerData == null)
             {
@@ -146,35 +170,39 @@ public class ActService : IDisposable
 
             log.Information($"[ActService] Player data fields: {string.Join(", ", ((JObject)playerData).Properties().Select(p => $"{p.Name}:{p.Value}"))}");
 
-            var dpsString = playerData["DPS"]?.ToString();
-            log.Information($"[ActService] Raw DPS string: '{dpsString}'");
+            // Try EncDPS first, then try encdps, then DPS as fallback
+            var encDpsString = playerData["EncDPS"]?.ToString() ?? 
+                               playerData["encdps"]?.ToString() ?? 
+                               playerData["DPS"]?.ToString();
+            log.Information($"[ActService] Raw EncDPS string: '{encDpsString}'");
             
-            if (string.IsNullOrEmpty(dpsString))
+            if (string.IsNullOrEmpty(encDpsString))
             {
-                log.Warning("[ActService] No DPS data found");
+                log.Warning($"[ActService] No EncDPS/DPS data found. Available fields: {string.Join(", ", ((JObject)playerData).Properties().Select(p => p.Name))}");
                 return;
             }
 
-            if (double.TryParse(dpsString, out var dps))
+            if (double.TryParse(encDpsString, out var dps))
             {
                 // Ignore infinite or NaN values
                 if (double.IsInfinity(dps) || double.IsNaN(dps))
                 {
-                    log.Debug($"[ActService] Ignoring invalid DPS value: {dps}");
+                    log.Debug($"[ActService] Ignoring invalid EncDPS value: {dps}");
                     return;
                 }
 
-                log.Information($"[ActService] Successfully parsed DPS: {dps:F1}");
+                log.Information($"[ActService] Successfully parsed EncDPS: {dps:F1}");
                 
                 // Extract job info
                 var jobString = playerData["Job"]?.ToString();
+                lastJobId = jobString;
                 log.Information($"[ActService] Job data: {jobString}");
                 
                 OnDpsDataReceived?.Invoke(this, new DpsDataEventArgs { PersonalDps = dps, JobId = jobString });
             }
             else
             {
-                log.Warning($"[ActService] Failed to parse DPS value: {dpsString}");
+                log.Warning($"[ActService] Failed to parse EncDPS value: {encDpsString}");
             }
         }
         catch (Exception ex)

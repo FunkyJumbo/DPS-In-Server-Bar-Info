@@ -28,6 +28,10 @@ public sealed class Plugin : IDalamudPlugin
     private IDtrBarEntry? dpsEntry;
     private ActService? actService;
     private bool wasInCombat = false;
+    private DateTime? combatEndTime = null;
+    private bool showFinalIndicator = false;
+    private double lastDpsValue = 0;
+    private string? lastJobName = null;
 
     public Configuration Configuration { get; init; }
 
@@ -89,20 +93,36 @@ public sealed class Plugin : IDalamudPlugin
             Log.Information("[Plugin] Entered combat - connecting to OverlayPlugin");
             actService?.Connect();
             wasInCombat = true;
+            combatEndTime = null;
+            showFinalIndicator = false;
         }
         else if (!inCombat && wasInCombat)
         {
-            // Just left combat - disconnect from OverlayPlugin
-            Log.Information("[Plugin] Left combat - disconnecting from OverlayPlugin");
-            actService?.Dispose();
-            actService = new ActService(Log);
-            actService.OnDpsDataReceived += OnActDpsReceived;
-            wasInCombat = false;
-            
-            // Reset DPS display
-            if (dpsEntry != null)
+            // Just left combat - mark the end time but keep listening for 2 seconds
+            if (combatEndTime == null)
             {
-                dpsEntry.Text = "- DPS";
+                combatEndTime = DateTime.UtcNow;
+                Log.Information("[Plugin] Left combat - will disconnect in 2 seconds to get final DPS update");
+            }
+            
+            // Check if 2 seconds have passed since combat ended
+            if ((DateTime.UtcNow - combatEndTime.Value).TotalSeconds >= 2)
+            {
+                Log.Information("[Plugin] 2 seconds elapsed - disconnecting from OverlayPlugin");
+                showFinalIndicator = true;
+                
+                // Update display with final indicator
+                if (dpsEntry != null && lastDpsValue > 0)
+                {
+                    var indicator = showFinalIndicator ? "● " : "";
+                    dpsEntry.Text = $"{indicator}{lastJobName} {(int)Math.Round(lastDpsValue)} DPS";
+                }
+                
+                actService?.Dispose();
+                actService = new ActService(Log);
+                actService.OnDpsDataReceived += OnActDpsReceived;
+                wasInCombat = false;
+                combatEndTime = null;
             }
         }
     }
@@ -113,7 +133,13 @@ public sealed class Plugin : IDalamudPlugin
         {
             var dpsValue = (int)Math.Round(e.PersonalDps);
             var jobName = e.JobId?.ToUpper() ?? "???";
-            dpsEntry.Text = $"{jobName} {dpsValue} DPS";
+            
+            // Store last values for final indicator update
+            lastDpsValue = e.PersonalDps;
+            lastJobName = jobName;
+            
+            var indicator = showFinalIndicator ? "● " : "";
+            dpsEntry.Text = $"{indicator}{jobName} {dpsValue} DPS";
         }
     }
 

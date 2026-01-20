@@ -157,6 +157,13 @@ public class ActService : IDisposable
 
             if (double.TryParse(dpsString, out var dps))
             {
+                // Ignore infinite or NaN values
+                if (double.IsInfinity(dps) || double.IsNaN(dps))
+                {
+                    log.Debug($"[ActService] Ignoring invalid DPS value: {dps}");
+                    return;
+                }
+
                 log.Information($"[ActService] Successfully parsed DPS: {dps:F1}");
                 
                 // Extract job info

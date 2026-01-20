@@ -21,10 +21,13 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IDataManager DataManager { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IDtrBar DtrBar { get; private set; } = null!;
+    [PluginService] internal static ICondition Condition { get; private set; } = null!;
+    [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
     private const string CommandName = "/pmycommand";
     private IDtrBarEntry? dpsEntry;
     private ActService? actService;
+    private bool wasInCombat = false;
 
     public Configuration Configuration { get; init; }
 
@@ -68,10 +71,40 @@ public sealed class Plugin : IDalamudPlugin
         // Initialize DTR bar entry for DPS display
         InitializeDtrBar();
 
-        // Initialize ACT service
+        // Initialize ACT service (but don't connect yet)
         actService = new ActService(Log);
         actService.OnDpsDataReceived += OnActDpsReceived;
-        actService.Connect();
+
+        // Subscribe to Framework update to monitor combat state
+        Framework.Update += OnFrameworkUpdate;
+    }
+
+    private void OnFrameworkUpdate(IFramework framework)
+    {
+        bool inCombat = Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.InCombat];
+
+        if (inCombat && !wasInCombat)
+        {
+            // Just entered combat - connect to OverlayPlugin
+            Log.Information("[Plugin] Entered combat - connecting to OverlayPlugin");
+            actService?.Connect();
+            wasInCombat = true;
+        }
+        else if (!inCombat && wasInCombat)
+        {
+            // Just left combat - disconnect from OverlayPlugin
+            Log.Information("[Plugin] Left combat - disconnecting from OverlayPlugin");
+            actService?.Dispose();
+            actService = new ActService(Log);
+            actService.OnDpsDataReceived += OnActDpsReceived;
+            wasInCombat = false;
+            
+            // Reset DPS display
+            if (dpsEntry != null)
+            {
+                dpsEntry.Text = "- DPS";
+            }
+        }
     }
 
     private void OnActDpsReceived(object? sender, DpsDataEventArgs e)
@@ -105,6 +138,7 @@ public sealed class Plugin : IDalamudPlugin
     public void Dispose()
     {
         // Unregister all actions to not leak anything during disposal of plugin
+        Framework.Update -= OnFrameworkUpdate;
         PluginInterface.UiBuilder.Draw -= WindowSystem.Draw;
         PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
         PluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
